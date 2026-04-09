@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Banana Basket Challenge</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+  <style>
+    :root {
+      --panel-bg: rgba(11, 18, 32, 0.74);
+      --panel-border: rgba(255,255,255,0.14);
+      --text: #f8fafc;
+      --muted: #cbd5e1;
+      --gold: #fbbf24;
+      --shadow: 0 12px 36px rgba(0,0,0,0.26);
+      --brown-1: #7a4c22;
+      --brown-2: #a66b2f;
+      --brown-3: #563214;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: transparent;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    body { color: var(--text); }
+    canvas { display: block; }
+
+    #ui {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    #giftStack {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1.2;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.75);
+      z-index: 6;
+      max-width: 180px;
+    }
+
+    #giftStack .gold { color: var(--gold); }
+    #giftStack .muted { color: rgba(255,255,255,0.92); }
+
+    #scorePanel {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 210px;
+      padding: 12px 14px;
+      min-height: 94px;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      z-index: 6;
+    }
+
+    .panel-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 8px;
+    }
+
+    .score-row {
+      display: grid;
+      grid-template-columns: 26px 1fr auto;
+      gap: 8px;
+      align-items: center;
+      padding: 7px 0;
+      font-size: 13px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .score-row:last-child { border-bottom: none; }
+
+    .rank-pill {
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: rgba(251,191,36,0.16);
+      border: 1px solid rgba(251,191,36,0.25);
+      color: #fde68a;
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .score-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 700;
+    }
+
+    .score-points {
+      font-weight: 900;
+      color: #fef3c7;
+    }
+
+    .empty-state {
+      color: var(--muted);
+      font-size: 12px;
+      padding-top: 2px;
+    }
+
+    .label {
+      position: absolute;
+      transform: translate(-50%, -118%);
+      font-size: 18px;
+      font-weight: 900;
+      color: #fbbf24;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.9);
+      white-space: nowrap;
+      max-width: 150px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      pointer-events: none;
+      z-index: 4;
+    }
+
+    #basketVisual {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 148px;
+      height: 108px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 3;
+      filter: drop-shadow(0 16px 22px rgba(0,0,0,0.34));
+    }
+
+    .basket-rim-back,
+    .basket-rim-front {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      height: 12px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, #d79b58 0%, #9d632b 100%);
+      border: 2px solid rgba(72, 40, 14, 0.8);
+    }
+
+    .basket-rim-back { top: 15px; opacity: 0.82; }
+    .basket-rim-front { top: 27px; z-index: 3; }
+
+    .basket-body {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 24px;
+      bottom: 10px;
+      border-radius: 15px 15px 26px 26px;
+      background: linear-gradient(180deg, #cb8a47 0%, #af7133 46%, #8f5624 100%);
+      border: 3px solid var(--brown-3);
+      overflow: hidden;
+    }
+
+    .basket-slat {
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      height: 9px;
+      border-radius: 999px;
+      border: 2px solid rgba(91, 52, 20, 0.62);
+      background: linear-gradient(180deg, rgba(255,255,255,0.24), rgba(255,255,255,0.05) 32%, rgba(70,40,12,0.24) 100%);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.16);
+    }
+
+    .basket-weave {
+      position: absolute;
+      top: 16px;
+      bottom: 12px;
+      width: 9px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.02) 36%, rgba(73,40,13,0.35) 100%);
+      border: 1px solid rgba(84,46,18,0.4);
+      opacity: 0.8;
+    }
+
+    .slat-1 { top: 16px; }
+    .slat-2 { top: 36px; }
+    .slat-3 { top: 56px; }
+    .weave-1 { left: 22px; }
+    .weave-2 { left: 46px; }
+    .weave-3 { right: 46px; }
+    .weave-4 { right: 22px; }
+
+    #testPanel {
+      position: absolute;
+      left: 16px;
+      bottom: 18px;
+      width: min(300px, calc(100% - 32px));
+      padding: 14px 16px;
+      display: none;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      pointer-events: auto;
+      z-index: 8;
+    }
+
+    #testPanel.visible { display: block; }
+
+    .test-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .test-grid button {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.08);
+      color: #f8fafc;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .test-help {
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    @media (max-width: 980px) {
+      .label { font-size: 16px; max-width: 132px; }
+    }
+
+    @media (max-aspect-ratio: 10/16) {
+      #giftStack { top: 10px; left: 10px; font-size: 11px; }
+      #scorePanel { top: 10px; right: 10px; width: 180px; }
+      .score-row, .empty-state { font-size: 11px; }
+      #basketVisual { height: 104px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <div id="giftStack" aria-label="Gift point guide">
+      <div><span class="gold">Rose</span> <span class="muted">→ 10 pts</span></div>
+      <div><span class="gold">Panda</span> <span class="muted">→ 100 pts</span></div>
+      <div><span class="gold">Firework</span> <span class="muted">→ 500 pts</span></div>
+      <div><span class="gold">Galaxy</span> <span class="muted">→ 5,000 pts</span></div>
+    </div>
+
+    <div id="scorePanel">
+      <div class="panel-title">Top Scores</div>
+      <div id="leaderboardList" class="empty-state">No catches yet.</div>
+    </div>
+
+    <div id="basketVisual" aria-hidden="true">
+      <div class="basket-rim-back"></div>
+      <div class="basket-body">
+        <div class="basket-slat slat-1"></div>
+        <div class="basket-slat slat-2"></div>
+        <div class="basket-slat slat-3"></div>
+        <div class="basket-weave weave-1"></div>
+        <div class="basket-weave weave-2"></div>
+        <div class="basket-weave weave-3"></div>
+        <div class="basket-weave weave-4"></div>
+      </div>
+      <div class="basket-rim-front"></div>
+    </div>
+
+    <div id="testPanel">
+      <div class="panel-title">Test Mode</div>
+      <div class="test-grid">
+        <button data-test-coins="1" data-test-user="rose-fan" data-test-gift="Rose">Rose</button>
+        <button data-test-coins="10" data-test-user="panda-pro" data-test-gift="Panda">Panda</button>
+        <button data-test-coins="100" data-test-user="firework-king" data-test-gift="Firework">Firework</button>
+        <button data-test-coins="1000" data-test-user="galaxy-boss" data-test-gift="Galaxy">Galaxy</button>
+        <button data-test-action="demo">Auto Demo</button>
+        <button data-test-action="reset">Reset</button>
+      </div>
+      <div class="test-help">Keys: 1-4 spawn tiers • D demo • R reset • T toggle panel</div>
+    </div>
+  </div>
+
+  <script>
+    const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
+
+    const BANANA_VIEW_W = 260;
+    const BANANA_VIEW_H = 140;
+    const BANANA_NO_COLLIDE_GROUP = -777;
+
+    const BANANA_PALETTES = {
+      common: {
+        bodyStart: '#ffe766',
+        bodyMid: '#f5d11d',
+        bodyEnd: '#dfb400',
+        edge: '#875400',
+        shade: '#b07a00',
+        sheen: 'rgba(255,255,255,0.58)'
+      },
+      rare: {
+        bodyStart: '#bce8ff',
+        bodyMid: '#71bfff',
+        bodyEnd: '#3477f5',
+        edge: '#1d4294',
+        shade: '#2757b0',
+        sheen: 'rgba(255,255,255,0.5)'
+      },
+      epic: {
+        bodyStart: '#ffbe76',
+        bodyMid: '#ff7a45',
+        bodyEnd: '#d92d20',
+        edge: '#7f1d1d',
+        shade: '#a8301f',
+        sheen: 'rgba(255,240,220,0.42)'
+      },
+      legendary: {
+        bodyStart: '#ffe066',
+        bodyMid: '#ff5f6d',
+        bodyEnd: '#7c4dff',
+        edge: '#5b2b8b',
+        shade: '#7f35b2',
+        sheen: 'rgba(255,255,255,0.42)'
+      }
+    };
+
+    function svgToTexture(svg) {
+      return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
+
+    function bananaSvg(tierKey) {
+      const palette = BANANA_PALETTES[tierKey] || BANANA_PALETTES.common;
+      const bodyGradient = tierKey === 'legendary'
+        ? `
+          <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#ffe066"/>
+            <stop offset="18%" stop-color="#ffd43b"/>
+            <stop offset="36%" stop-color="#7dd3fc"/>
+            <stop offset="54%" stop-color="#4ade80"/>
+            <stop offset="72%" stop-color="#fb7185"/>
+            <stop offset="100%" stop-color="#7c3aed"/>
+          </linearGradient>
+        `
+        : `
+          <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="${palette.bodyStart}"/>
+            <stop offset="55%" stop-color="${palette.bodyMid}"/>
+            <stop offset="100%" stop-color="${palette.bodyEnd}"/>
+          </linearGradient>
+        `;
+
+      return `
+        <svg xmlns="http://www.w3.org/2000/svg" width="${BANANA_VIEW_W}" height="${BANANA_VIEW_H}" viewBox="0 0 260 140">
+          <defs>
+            ${bodyGradient}
+          </defs>
+
+          <path d="M32 100
+                   C40 74, 56 48, 83 31
+                   C110 14, 145 10, 176 18
+                   C196 23, 212 32, 224 42
+                   C213 44, 204 49, 198 56
+                   C181 50, 162 49, 140 54
+                   C114 59, 89 73, 69 92
+                   C57 104, 49 116, 44 126
+                   C36 123, 31 115, 32 100 Z"
+                fill="url(#body)" stroke="${palette.edge}" stroke-width="4" stroke-linejoin="round"/>
+
+          <path d="M52 98
+                   C63 73, 79 54, 102 43
+                   C127 30, 155 28, 182 34
+                   C171 39, 162 47, 156 57
+                   C134 55, 115 60, 96 70
+                   C80 79, 66 92, 55 108"
+                fill="none" stroke="${palette.sheen}" stroke-width="7" stroke-linecap="round"/>
+
+          <path d="M58 116
+                   C78 89, 106 71, 142 64
+                   C167 60, 189 62, 205 70"
+                fill="none" stroke="${palette.shade}" stroke-opacity="0.55" stroke-width="6" stroke-linecap="round"/>
+
+          <path d="M217 38
+                   C225 33, 234 30, 241 31
+                   C242 36, 238 41, 233 46
+                   C228 48, 222 47, 217 43 Z"
+                fill="#6a3f12" stroke="#4b2908" stroke-width="2"/>
+
+          <path d="M38 119
+                   C31 123, 25 124, 20 121
+                   C22 114, 28 108, 36 107"
+                fill="#7c4f11" stroke="#4b2908" stroke-width="2"/>
+        </svg>`;
+    }
+
+    const BANANA_TEXTURES = {
+      common: svgToTexture(bananaSvg('common')),
+      rare: svgToTexture(bananaSvg('rare')),
+      epic: svgToTexture(bananaSvg('epic')),
+      legendary: svgToTexture(bananaSvg('legendary'))
+    };
+
+    const engine = Engine.create();
+    engine.gravity.y = 0.22;
+
+    const render = Render.create({
+      element: document.body,
+      engine,
+      options: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        wireframes: false,
+        background: 'transparent'
+      }
+    });
+
+    Render.run(render);
+    Runner.run(Runner.create(), engine);
+
+    const ui = document.getElementById('ui');
+    const giftStack = document.getElementById('giftStack');
+    const scorePanel = document.getElementById('scorePanel');
+    const leaderboardList = document.getElementById('leaderboardList');
+    const basketVisual = document.getElementById('basketVisual');
+    const testPanel = document.getElementById('testPanel');
+    const testModeFromUrl = new URLSearchParams(window.location.search).get('test') === '1';
+
+    let viewport = { width: window.innerWidth, height: window.innerHeight };
+    let safeArea = { left: 0, right: 0, width: viewport.width, centerX: viewport.width / 2 };
+    let testPanelVisible = testModeFromUrl;
+
+    const activeBananas = [];
+    const spawnQueue = [];
+    const scores = Object.create(null);
+
+    const MAX_ACTIVE_BANANAS = 160;
+    const MAX_SPAWNS_PER_TICK = 4;
+    const floorHeight = 48;
+    const bucketWallThickness = 10;
+    const bucketWallHeight = 58;
+    const bucketBottomThickness = 14;
+    const catchHeight = 52;
+    const catchLift = 30;
+    let centerDropXOverride = null;
+    let spawnCounter = 0;
+
+    let bucketBaseWidth = 100;
+    let bucketWidth = bucketBaseWidth;
+    let basketPulse = 0;
+    let bucketX = viewport.width / 2;
+    let bucketDir = 1;
+    let bucketSpeed = 1.2;
+    let bucketFloorY = viewport.height - 150;
+
+    const TIER_CONFIG = {
+      common: { points: 10, width: 98, height: 40, fallBoost: 0.00, homing: null },
+      rare: { points: 100, width: 102, height: 41, fallBoost: 0.01, homing: null },
+      epic: {
+        points: 500,
+        width: 100,
+        height: 40,
+        fallBoost: 0.02,
+        homing: { startYFactor: 0.32, steerGain: 0.013, steerBlend: 0.08, maxVx: 1.55, maxFall: 3.0, fallAssist: 0.006 }
+      },
+      legendary: {
+        points: 5000,
+        width: 106,
+        height: 42,
+        fallBoost: 0.02,
+        homing: { startYFactor: 0.28, steerGain: 0.015, steerBlend: 0.085, maxVx: 1.75, maxFall: 3.15, fallAssist: 0.0065 }
+      }
+    };
+
+    const worldBounds = {
+      floor: Bodies.rectangle(viewport.width / 2, viewport.height + floorHeight / 2, viewport.width + 200, floorHeight, {
+        isStatic: true,
+        label: 'floor',
+        render: { visible: false }
+      }),
+      leftWall: Bodies.rectangle(-40, viewport.height / 2, 80, viewport.height * 2, {
+        isStatic: true,
+        label: 'wall',
+        render: { visible: false }
+      }),
+      rightWall: Bodies.rectangle(viewport.width + 40, viewport.height / 2, 80, viewport.height * 2, {
+        isStatic: true,
+        label: 'wall',
+        render: { visible: false }
+      })
+    };
+
+    const bucket = {
+      bottom: Bodies.rectangle(bucketX, bucketFloorY, bucketWidth, bucketBottomThickness, {
+        isStatic: true,
+        label: 'bucketBottom',
+        render: { visible: false }
+      }),
+      left: Bodies.rectangle(bucketX - bucketWidth / 2, bucketFloorY - 28, bucketWallThickness, bucketWallHeight, {
+        isStatic: true,
+        label: 'bucketWall',
+        render: { visible: false }
+      }),
+      right: Bodies.rectangle(bucketX + bucketWidth / 2, bucketFloorY - 28, bucketWallThickness, bucketWallHeight, {
+        isStatic: true,
+        label: 'bucketWall',
+        render: { visible: false }
+      }),
+      catchZone: Bodies.rectangle(bucketX, bucketFloorY - catchLift, bucketWidth - 16, catchHeight, {
+        isStatic: true,
+        isSensor: true,
+        label: 'catchZone',
+        render: { visible: false }
+      })
+    };
+
+    Composite.add(engine.world, [
+      worldBounds.floor,
+      worldBounds.leftWall,
+      worldBounds.rightWall,
+      bucket.bottom,
+      bucket.left,
+      bucket.right,
+      bucket.catchZone
+    ]);
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function displayName(name, max = 14) {
+      const cleaned = String(name || 'Viewer').trim().replace(/\s+/g, ' ');
+      if (cleaned.length <= max) return cleaned;
+      return cleaned.slice(0, max - 1) + '…';
+    }
+
+    function formatScore(n) {
+      return Number(n || 0).toLocaleString();
+    }
+
+    function getTierFromCoins(coins) {
+      if (coins >= 1000) return { ...TIER_CONFIG.legendary, key: 'legendary' };
+      if (coins >= 100) return { ...TIER_CONFIG.epic, key: 'epic' };
+      if (coins >= 10) return { ...TIER_CONFIG.rare, key: 'rare' };
+      return { ...TIER_CONFIG.common, key: 'common' };
+    }
+
+    function updateLeaderboard() {
+      const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      if (!sorted.length) {
+        leaderboardList.className = 'empty-state';
+        leaderboardList.textContent = 'No catches yet.';
+        return;
+      }
+
+      leaderboardList.className = '';
+      leaderboardList.innerHTML = sorted.map(([user, score], idx) => `
+        <div class="score-row">
+          <div class="rank-pill">#${idx + 1}</div>
+          <div class="score-name" title="${user.replace(/"/g, '&quot;')}">${displayName(user, 16)}</div>
+          <div class="score-points">${formatScore(score)}</div>
+        </div>
+      `).join('');
+    }
+
+    function getDropX(spawnX) {
+      if (Number.isFinite(spawnX)) return clamp(spawnX, safeArea.left + 36, safeArea.right - 36);
+      if (Number.isFinite(centerDropXOverride)) return clamp(centerDropXOverride, safeArea.left + 36, safeArea.right - 36);
+      return safeArea.centerX;
+    }
+
+    function getBucketLimits() {
+      return {
+        left: safeArea.left + 18 + bucketWidth / 2,
+        right: safeArea.right - 18 - bucketWidth / 2
+      };
+    }
+
+    function removeBanana(banana) {
+      const idx = activeBananas.indexOf(banana);
+      if (idx !== -1) activeBananas.splice(idx, 1);
+      Composite.remove(engine.world, banana.body, true);
+      banana.label.remove();
+    }
+
+    function createBananaBody(tier, x) {
+      const body = Bodies.rectangle(x, -60, tier.width, tier.height, {
+        restitution: 0.02,
+        friction: 0.004,
+        frictionAir: 0.048,
+        density: 0.001,
+        chamfer: { radius: Math.floor(tier.height / 2) },
+        inertia: Infinity,
+        angle: -0.25,
+        label: 'banana',
+        collisionFilter: { group: BANANA_NO_COLLIDE_GROUP },
+        render: {
+          fillStyle: 'transparent',
+          strokeStyle: 'transparent',
+          sprite: {
+            texture: BANANA_TEXTURES[tier.key] || BANANA_TEXTURES.common,
+            xScale: tier.width / BANANA_VIEW_W,
+            yScale: tier.height / BANANA_VIEW_H
+          }
+        }
+      });
+      Body.setVelocity(body, { x: 0, y: 0.14 + tier.fallBoost });
+      return body;
+    }
+
+    function buildBanana(user, coins, giftName, spawnX) {
+      const tier = getTierFromCoins(coins);
+      const x = getDropX(spawnX);
+      const body = createBananaBody(tier, x);
+
+      const label = document.createElement('div');
+      label.className = 'label';
+      label.textContent = displayName(user, 14);
+      ui.appendChild(label);
+
+      const banana = {
+        id: 'b' + (++spawnCounter),
+        user: String(user || 'Viewer').trim() || 'Viewer',
+        giftName: giftName ? String(giftName) : '',
+        coins: Number(coins || 1),
+        tier,
+        body,
+        label,
+        resolved: false
+      };
+
+      Composite.add(engine.world, body);
+      activeBananas.push(banana);
+      return banana;
+    }
+
+    function resolveCatch(banana) {
+      if (banana.resolved) return;
+      banana.resolved = true;
+      scores[banana.user] = (scores[banana.user] || 0) + banana.tier.points;
+      basketPulse = 1;
+      updateLeaderboard();
+      setTimeout(() => removeBanana(banana), 20);
+    }
+
+    function resolveMiss(banana) {
+      if (banana.resolved) return;
+      banana.resolved = true;
+      setTimeout(() => removeBanana(banana), 20);
+    }
+
+    function positionBasketVisual() {
+      basketVisual.style.left = `${bucketX}px`;
+      basketVisual.style.top = `${bucketFloorY - 20}px`;
+      basketVisual.style.transform = `translate(-50%, -50%) scale(${(1 + basketPulse * 0.06).toFixed(3)})`;
+    }
+
+    function positionUi() {
+      const scoreWidth = clamp(safeArea.width * 0.38, 188, 220);
+      giftStack.style.left = `${safeArea.left + 10}px`;
+      giftStack.style.top = `16px`;
+      giftStack.style.maxWidth = `${Math.max(130, safeArea.width - scoreWidth - 26)}px`;
+
+      scorePanel.style.width = `${scoreWidth}px`;
+      scorePanel.style.left = `${safeArea.right - scoreWidth - 10}px`;
+      scorePanel.style.top = `16px`;
+    }
+
+    function moveBucket(nextX) {
+      bucketX = nextX;
+      Body.setPosition(bucket.bottom, { x: bucketX, y: bucketFloorY });
+      Body.setPosition(bucket.left, { x: bucketX - bucketWidth / 2, y: bucketFloorY - 28 });
+      Body.setPosition(bucket.right, { x: bucketX + bucketWidth / 2, y: bucketFloorY - 28 });
+      Body.setPosition(bucket.catchZone, { x: bucketX, y: bucketFloorY - catchLift });
+      positionBasketVisual();
+    }
+
+    function predictBucketX(framesAhead) {
+      const { left, right } = getBucketLimits();
+      let x = bucketX;
+      let dir = bucketDir;
+      let remaining = Math.max(0, framesAhead) * bucketSpeed;
+      while (remaining > 0.001) {
+        const boundary = dir > 0 ? right : left;
+        const distance = Math.abs(boundary - x);
+        if (remaining <= distance) {
+          x += dir * remaining;
+          remaining = 0;
+        } else {
+          x = boundary;
+          remaining -= distance;
+          dir *= -1;
+        }
+      }
+      return clamp(x, left, right);
+    }
+
+    function updateViewportMetrics() {
+      viewport = { width: window.innerWidth, height: window.innerHeight };
+      if (viewport.height > viewport.width) {
+        safeArea.width = viewport.width - 24;
+      } else {
+        safeArea.width = clamp(viewport.height * 0.58, 360, Math.min(viewport.width - 32, 540));
+      }
+      safeArea.left = Math.round((viewport.width - safeArea.width) / 2);
+      safeArea.right = safeArea.left + safeArea.width;
+      safeArea.centerX = safeArea.left + safeArea.width / 2;
+
+      bucketBaseWidth = clamp(safeArea.width * 0.2, 94, 112);
+      bucketFloorY = viewport.height - clamp(viewport.height * 0.12, 118, 165);
+      bucketSpeed = clamp(safeArea.width / 360, 1.0, 1.45);
+    }
+
+    function resizeBodies() {
+      updateViewportMetrics();
+      render.options.width = viewport.width;
+      render.options.height = viewport.height;
+      render.canvas.width = viewport.width;
+      render.canvas.height = viewport.height;
+
+      Body.setPosition(worldBounds.floor, { x: viewport.width / 2, y: viewport.height + floorHeight / 2 });
+      Body.setPosition(worldBounds.leftWall, { x: -40, y: viewport.height / 2 });
+      Body.setPosition(worldBounds.rightWall, { x: viewport.width + 40, y: viewport.height / 2 });
+
+      bucketWidth = bucketBaseWidth;
+      const limits = getBucketLimits();
+      bucketX = clamp(bucketX || safeArea.centerX, limits.left, limits.right);
+      positionUi();
+      moveBucket(bucketX);
+    }
+
+    function flushSpawnQueue() {
+      let spawned = 0;
+      while (spawnQueue.length && spawned < MAX_SPAWNS_PER_TICK) {
+        while (activeBananas.length >= MAX_ACTIVE_BANANAS) {
+          const oldest = activeBananas[0];
+          oldest.resolved = true;
+          removeBanana(oldest);
+        }
+        const next = spawnQueue.shift();
+        buildBanana(next.user, next.coins, next.giftName, next.spawnX);
+        spawned += 1;
+      }
+    }
+
+    Events.on(engine, 'beforeUpdate', () => {
+      flushSpawnQueue();
+
+      basketPulse *= 0.82;
+      if (basketPulse < 0.02) basketPulse = 0;
+
+      const limits = getBucketLimits();
+      let nextX = bucketX + bucketSpeed * bucketDir;
+      if (nextX >= limits.right || nextX <= limits.left) {
+        bucketDir *= -1;
+        nextX = clamp(nextX, limits.left, limits.right);
+      }
+      moveBucket(nextX);
+
+      for (let i = activeBananas.length - 1; i >= 0; i--) {
+        const banana = activeBananas[i];
+        if (banana.resolved) continue;
+
+        const body = banana.body;
+        const homing = banana.tier.homing;
+
+        if (homing && body.position.y > viewport.height * homing.startYFactor) {
+          const dy = Math.max(16, (bucketFloorY - catchLift) - body.position.y);
+          const framesToCatch = clamp(dy / Math.max(body.velocity.y, 2.2), 14, 58);
+          const predictedX = predictBucketX(framesToCatch * 0.92);
+          const dx = predictedX - body.position.x;
+          const desiredVx = clamp(dx * homing.steerGain, -homing.maxVx, homing.maxVx);
+          const nextVx = body.velocity.x + (desiredVx - body.velocity.x) * homing.steerBlend;
+          const nextVy = clamp(body.velocity.y + homing.fallAssist, -8, homing.maxFall);
+          Body.setVelocity(body, { x: nextVx, y: nextVy });
+        } else {
+          Body.setVelocity(body, { x: body.velocity.x * 0.985, y: Math.min(body.velocity.y + 0.0025, 2.8) });
+        }
+
+        const catchLeft = bucketX - (bucketWidth - 18) / 2;
+        const catchRight = bucketX + (bucketWidth - 18) / 2;
+        const catchTop = bucketFloorY - catchLift - catchHeight / 2;
+        const catchBottom = bucketFloorY - 8;
+        if (body.position.x >= catchLeft && body.position.x <= catchRight && body.position.y >= catchTop && body.position.y <= catchBottom) {
+          resolveCatch(banana);
+          continue;
+        }
+
+        const labelX = clamp(body.position.x, safeArea.left + 28, safeArea.right - 28);
+        banana.label.style.left = `${labelX}px`;
+        banana.label.style.top = `${body.position.y - 22}px`;
+
+        if (body.position.y > viewport.height + 120) resolveMiss(banana);
+      }
+    });
+
+    Events.on(engine, 'collisionStart', (event) => {
+      for (const pair of event.pairs) {
+        const { bodyA, bodyB } = pair;
+        const bananaBody = bodyA.label === 'banana' ? bodyA : bodyB.label === 'banana' ? bodyB : null;
+        if (!bananaBody) continue;
+        const banana = activeBananas.find(item => item.body === bananaBody);
+        if (!banana || banana.resolved) continue;
+        const other = bananaBody === bodyA ? bodyB : bodyA;
+        if (other.label === 'catchZone') resolveCatch(banana);
+        if (other.label === 'floor') resolveMiss(banana);
+      }
+    });
+
+    function normalizePayload(userOrPayload, coinsArg, giftNameArg) {
+      if (typeof userOrPayload === 'object' && userOrPayload !== null) {
+        return {
+          user: userOrPayload.userName || userOrPayload.user || userOrPayload.name || 'Viewer',
+          coins: Number(userOrPayload.giftCoins ?? userOrPayload.coins ?? userOrPayload.diamondCount ?? 1),
+          giftName: userOrPayload.giftName || userOrPayload.gift || '',
+          spawnX: Number(userOrPayload.x ?? userOrPayload.spawnX ?? userOrPayload.dropX)
+        };
+      }
+      return {
+        user: userOrPayload || 'Viewer',
+        coins: Number(coinsArg ?? 1),
+        giftName: giftNameArg || '',
+        spawnX: Number.NaN
+      };
+    }
+
+    window.spawnBanana = function(userOrPayload, coinsArg, giftNameArg) {
+      const payload = normalizePayload(userOrPayload, coinsArg, giftNameArg);
+      spawnQueue.push(payload);
+      return 'q' + (spawnQueue.length + activeBananas.length + 1);
+    };
+
+    window.spawnBananaAt = function(x, user, coins, giftName) {
+      return window.spawnBanana({ x, userName: user, giftCoins: coins, giftName });
+    };
+
+    window.resetBananaBasket = function() {
+      while (activeBananas.length) removeBanana(activeBananas[0]);
+      spawnQueue.length = 0;
+      for (const key of Object.keys(scores)) delete scores[key];
+      updateLeaderboard();
+    };
+
+    window.resetBananaBucket = window.resetBananaBasket;
+
+    window.setCenterDropX = function(x) {
+      const numeric = Number(x);
+      if (!Number.isFinite(numeric)) {
+        centerDropXOverride = null;
+        return safeArea.centerX;
+      }
+      centerDropXOverride = clamp(numeric, safeArea.left + 36, safeArea.right - 36);
+      return centerDropXOverride;
+    };
+
+    window.demoBananas = function() {
+      const demo = [
+        ['rose-fan', 1, 'Rose'],
+        ['panda-pro', 10, 'Panda'],
+        ['firework-king', 100, 'Firework'],
+        ['galaxy-boss', 1000, 'Galaxy']
+      ];
+      demo.forEach((entry, idx) => setTimeout(() => window.spawnBanana(...entry), idx * 500));
+    };
+
+    function syncTestPanel() {
+      testPanel.classList.toggle('visible', testPanelVisible);
+    }
+
+    window.toggleTestPanel = function(force) {
+      testPanelVisible = typeof force === 'boolean' ? force : !testPanelVisible;
+      syncTestPanel();
+      return testPanelVisible;
+    };
+
+    testPanel.addEventListener('click', (event) => {
+      const button = event.target.closest('button');
+      if (!button) return;
+      const action = button.dataset.testAction;
+      if (action === 'demo') return window.demoBananas();
+      if (action === 'reset') return window.resetBananaBasket();
+      const coins = Number(button.dataset.testCoins || 1);
+      const user = button.dataset.testUser || 'test-viewer';
+      const gift = button.dataset.testGift || 'Test Gift';
+      window.spawnBanana(user, coins, gift);
+    });
+
+    window.addEventListener('keydown', (event) => {
+      const key = event.key.toLowerCase();
+      if (key === '1') window.spawnBanana('rose-fan', 1, 'Rose');
+      if (key === '2') window.spawnBanana('panda-pro', 10, 'Panda');
+      if (key === '3') window.spawnBanana('firework-king', 100, 'Firework');
+      if (key === '4') window.spawnBanana('galaxy-boss', 1000, 'Galaxy');
+      if (key === 'd') window.demoBananas();
+      if (key === 'r') window.resetBananaBasket();
+      if (key === 't') window.toggleTestPanel();
+    });
+
+    window.addEventListener('resize', resizeBodies);
+
+    updateLeaderboard();
+    resizeBodies();
+    syncTestPanel();
+  </script>
+</body>
+</html>
